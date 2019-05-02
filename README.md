@@ -14,7 +14,7 @@ Type "Sparthan" in the search box and select "Sparthan Myo"
 Click `install`. You are now all set, the library manager will automatically notify you of any updates we will release. 
 
 
-### Advanced: source code donwload 
+### Advanced: source code download 
 Open a terminal windown and move to your arduino library directory. Type this command to clone this repo into your library folder.
 
     git clone https://github.com/project-sparthan/sparthan-myo.git
