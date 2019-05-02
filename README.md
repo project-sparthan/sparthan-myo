@@ -15,7 +15,7 @@ Click `install`. You are now all set, the library manager will automatically not
 
 
 ### Advanced: source code download 
-Open a terminal windown and move to your arduino library directory. Type this command to clone this repo into your library folder.
+Open a terminal window and move to your arduino library directory. Type this command to clone this repo into your library folder.
 
     git clone https://github.com/project-sparthan/sparthan-myo.git
 
