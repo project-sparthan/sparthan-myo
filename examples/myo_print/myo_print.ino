@@ -22,7 +22,7 @@ void batteryCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic, uint8_t*
 }
 
 void imuCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic, uint8_t* pData, size_t length, bool isNotify) {
-  Serial.print ("EMG: \t");
+  Serial.print ("IMU: \t");
   for (int i = 0; i < length; i++) {
     Serial.print(pData[i]);
     Serial.print("\t");
@@ -31,7 +31,7 @@ void imuCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic, uint8_t* pDa
 }
 
 void emgCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic, uint8_t* pData, size_t length, bool isNotify) {
-  Serial.print ("IMU: \t");
+  Serial.print ("EMG: \t");
   for (int i = 0; i < length; i++) {
     Serial.print(pData[i]);
     Serial.print("\t");
