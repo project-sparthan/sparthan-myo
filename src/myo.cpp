@@ -63,8 +63,12 @@ class MyoClientCallbacks : public BLEClientCallbacks {
  ********************************************************************************************************/
 
 bool connectToServer(BLEClient*  pClient, BLEAddress pAddress) {
-  armband::debug ? Serial.print("Forming a connection to ") : 0;
-  armband::debug ? Serial.println(pAddress.toString().c_str()): 0;
+
+  if (armband::debug)
+  {
+    Serial.print("Forming a connection to ");
+    Serial.println(pAddress.toString().c_str());
+  }
 
   // Connect to the remove BLE Server.
   pClient->connect(pAddress);
@@ -72,11 +76,20 @@ bool connectToServer(BLEClient*  pClient, BLEAddress pAddress) {
   // Obtain a reference to the service we are after in the remote BLE server.
   BLERemoteService* pRemoteService = pClient->getService(serviceUUID);
   if (pRemoteService == nullptr) {
-    armband::debug ? Serial.print("Failed to find our service UUID: ") : 0;
-    armband::debug ? Serial.println(serviceUUID.toString().c_str()): 0;
+    if (armband::debug)
+    {
+      Serial.print("Failed to find our service UUID: ");
+      Serial.println(serviceUUID.toString().c_str());
+    }
     return false;
   }
-  armband::debug ? Serial.println(" - Found our service"): 0;
+
+  if (armband::debug)
+  {
+    Serial.println(" - Found our service");
+  }
+
+  return true;
 }
 
 void armband::connect() {
