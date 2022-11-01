@@ -1,251 +1,347 @@
 #include "myo.h"
+#include "ArduinoBLE.h"
 
-/* ENABLE SERIAL DEBUGGING BY SETTING myo.debug = true, **REQUIRES Serial.begin()** */
 
-// The remote service we wish to connect to.
-static BLEUUID serviceUUID("d5060001-a904-deb9-4748-2c7f4a124842");
-static BLERemoteCharacteristic* pRemoteCharacteristic;
-static BLEAddress *pServerAddress;
+// The remote service (Myo) we wish to connect to
+const char* deviceServiceUuid = "d5060001-a904-deb9-4748-2c7f4a124842"; //  scans for Bluetooth® Low Energy peripherals
+                                                                        //  until the one inside parenthesis is found.
 
-// Initialize status variables
-boolean armband::connected = false;
-boolean armband::detected = false;
-boolean armband::debug = false;
+void armband::scanCentral(){
 
-/********************************************************************************************************
-    BLUETOOTH CALLBACKS
- ********************************************************************************************************/
+  // begin initialization (initializes the library)
+  if (!BLE.begin()) {
+    Serial.println("starting Bluetooth® Low Energy module failed!");
 
-// Scan for BLE servers and find the first one that advertises the Myo ID service
-class MyoAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
-
-    // Called for each advertising BLE server.
-    void onResult(BLEAdvertisedDevice advertisedDevice) {
-
-      armband::debug ? Serial.print("BLE Advertised Device found: ") : 0;
-      armband::debug ? Serial.println(advertisedDevice.toString().c_str()) : 0;
-
-      // We have found a Myo, check if it contains the service ID we are looking for.
-      if (advertisedDevice.haveServiceUUID() && advertisedDevice.getServiceUUID().equals(serviceUUID)) {
-
-        armband::debug ? Serial.print(" - Myo device found") : 0; 
-        // Stop scanning
-        advertisedDevice.getScan()->stop();
-        // Save the address of the current Myo
-        pServerAddress = new BLEAddress(advertisedDevice.getAddress());
-        // Update detection status
-        armband::detected = true;
-      }
-    }
-};
-
-// Set the connect and disconnect behaviours
-class MyoClientCallbacks : public BLEClientCallbacks {
-
-    void onConnect(BLEClient* pClient) {
-      // Update connection status
-      armband::connected = true;
-    }
-    void onDisconnect(BLEClient* pClient) {
-      // Update connection status
-      armband::connected = false;
-      // Update detection status
-      armband::detected = false;
-      // Disconnect the clinet
-      pClient->disconnect();
-      // Clean the BLE stack for a new connection
-      delete pClient;
-    }
-};
-
-/********************************************************************************************************
-    CONNECTION
- ********************************************************************************************************/
-
-bool connectToServer(BLEClient*  pClient, BLEAddress pAddress) {
-  armband::debug ? Serial.print("Forming a connection to ") : 0;
-  armband::debug ? Serial.println(pAddress.toString().c_str()): 0;
-
-  // Connect to the remove BLE Server.
-  pClient->connect(pAddress);
-
-  // Obtain a reference to the service we are after in the remote BLE server.
-  BLERemoteService* pRemoteService = pClient->getService(serviceUUID);
-  if (pRemoteService == nullptr) {
-    armband::debug ? Serial.print("Failed to find our service UUID: ") : 0;
-    armband::debug ? Serial.println(serviceUUID.toString().c_str()): 0;
-    return false;
+    while (1);
   }
-  armband::debug ? Serial.println(" - Found our service"): 0;
+
+  Serial.println("Bluetooth® Low Energy Central scan");
+
+  // start scanning for peripheral
+  BLE.scanForUuid(deviceServiceUuid);
 }
 
-void armband::connect() {
-  if (!armband::connected) {
 
-    // Initialize BLE scan
-    BLEDevice::init("");
-    BLEScan* pBLEScan = BLEDevice::getScan();
-    // Set callbacks for finding devices
-    pBLEScan->setAdvertisedDeviceCallbacks(new MyoAdvertisedDeviceCallbacks());
-    // Active scan uses more power, but get results faster
-    pBLEScan->setActiveScan(true);
+void armband::controlPeripheral(BLEDevice peripheral) {
+  Serial.println("- Connecting to peripheral device ...");
+  //Serial.println(peripheral.connect());
+
+  if(peripheral.connect()) {
     
-    // Keep scanning untill a Myo is detected
-    while (!armband::detected) {
-      pBLEScan->start(10);
+  
+    Serial.println("* Connected to peripheral device Myo armband!");
+    Serial.println(" ");
+  } else {
+    Serial.println("* Connection to peripheral device Myo armband failed!");
+    Serial.println(" ");
+    return;
+  }
+  
+  Serial.println("- Discovering peripheral device attributes...");
+  if (peripheral.discoverAttributes()) {
+    Serial.println("* Peripheral device attributes discovered!");
+    Serial.println(" ");
+  } else {
+    Serial.println("* Peripheral device attributes discovery failed!");
+    Serial.println(" ");
+    peripheral.disconnect();
+    return;
+  }
+}
+
+void armband::connectToPeripheral(){
+  
+  // check if a peripheral has been discovered
+  BLEDevice peripheral = BLE.available();
+
+  if(peripheral) {
+
+    // discovered a peripheral
+    Serial.println("Peripheral device (Myo) found!");
+    Serial.println("-----------------------");
+
+    // print address
+    Serial.print("Device MAC address:: ");
+    Serial.println(peripheral.address());
+
+    // print the local name, if present
+    if (peripheral.hasLocalName()) {
+      Serial.print("Device name: ");
+      Serial.println(peripheral.localName());
     }
-    // Create new client and set up callbacks
-    armband::pClient = BLEDevice::createClient();
-    armband::pClient->setClientCallbacks(new MyoClientCallbacks());
 
-    // Attempt Server connection
-    connectToServer(armband::pClient, *pServerAddress);
-  }
+    // print the advertised service UUIDs, if present
+    if (peripheral.hasAdvertisedServiceUuid()) {
+      Serial.print("Advertised service UUID:  ");
+      for (int i = 0; i < peripheral.advertisedServiceUuidCount(); i++) {
+        Serial.print(peripheral.advertisedServiceUuid(i));
+        Serial.print(" ");
+      }
+      Serial.println();
+    }
+
+    // print the RSSI
+    Serial.print("RSSI: ");
+    Serial.println(peripheral.rssi());
+
+    Serial.println();
+    // stop scanning
+    BLE.stopScan();
+
+    controlPeripheral(peripheral); 
+    emg_notification(peripheral); 
+    //battery_notification(peripheral);
+ 
+    set_myo_mode(peripheral, myohw_emg_mode_send_emg,         // EMG mode
+              myohw_imu_mode_none,                            // IMU mode
+              myohw_classifier_mode_disabled);
+  
+    //imu_notification(peripheral);
+              
+
+     delay(1000);
 }
-
-
-/********************************************************************************************************
-    INFO
- ********************************************************************************************************/
-
-void armband::get_info() {
-  if (armband::connected) {
-    BLEUUID tservice = BLEUUID("d5060001-a904-deb9-4748-2c7f4a124842");
-    BLEUUID tcharacteristic = BLEUUID("d5060101-a904-deb9-4748-2c7f4a124842");
-    std::string stringt;
-    stringt = armband::pClient->getService(tservice)->getCharacteristic(tcharacteristic)->readValue();
-    armband::fw_serial_number[0]        = stringt[0];
-    armband::fw_serial_number[1]        = stringt[1];
-    armband::fw_serial_number[2]        = stringt[2];
-    armband::fw_serial_number[3]        = stringt[3];
-    armband::fw_serial_number[4]        = stringt[4];
-    armband::fw_serial_number[5]        = stringt[5];
-    armband::fw_serial_number[6]        = stringt[6];
-    armband::fw_unlock_pose             = (byte)stringt[8] * 256 + (byte)stringt[7];
-    armband::fw_active_classifier_type  = stringt[9];
-    armband::fw_active_classifier_index = stringt[10];
-    armband::fw_has_custom_classifier   = stringt[11];
-    armband::fw_stream_indicating       = stringt[12];
-    armband::fw_sku                     = stringt[13];
-    armband::fw_reserved[0]             = stringt[14];
-    armband::fw_reserved[1]             = stringt[15];
-    armband::fw_reserved[2]             = stringt[16];
-    armband::fw_reserved[3]             = stringt[17];
-    armband::fw_reserved[4]             = stringt[18];
-    armband::fw_reserved[5]             = stringt[19];
-    armband::fw_reserved[6]             = stringt[20];
-    armband::fw_reserved[7]             = stringt[21];
-  }
-}
-
-void armband::get_firmware() {
-  if (armband::connected) {
-    BLEUUID tservice = BLEUUID("d5060001-a904-deb9-4748-2c7f4a124842");
-    BLEUUID tcharacteristic = BLEUUID("d5060201-a904-deb9-4748-2c7f4a124842");
-    std::string stringt;
-    stringt = armband::pClient->getService(tservice)->getCharacteristic(tcharacteristic)->readValue();
-    armband::fw_major               = (byte)stringt[1] * 256 + (byte)stringt[0];
-    armband::fw_minor               = (byte)stringt[3] * 256 + (byte)stringt[2];
-    armband::fw_patch               = (byte)stringt[5] * 256 + (byte)stringt[4];
-    armband::fw_hardware_rev        = (byte)stringt[7] * 256 + (byte)stringt[6];
-  }
 }
 
 /********************************************************************************************************
-    NOTIFICATIONS
+    Battery notification
  ********************************************************************************************************/
 
-BLERemoteCharacteristic* armband::emg_notification(uint8_t on_off) {
-  if (armband::connected) {
-    BLEUUID tservice = BLEUUID("d5060005-a904-deb9-4748-2c7f4a124842");
-    BLEUUID tcharacteristic0 = BLEUUID("d5060105-a904-deb9-4748-2c7f4a124842");
-    BLEUUID tcharacteristic1 = BLEUUID("d5060205-a904-deb9-4748-2c7f4a124842");
-    BLEUUID tcharacteristic2 = BLEUUID("d5060305-a904-deb9-4748-2c7f4a124842");
-    BLEUUID tcharacteristic3 = BLEUUID("d5060405-a904-deb9-4748-2c7f4a124842");
-    uint8_t NotifyOn[] = {on_off, 0x00};
-    armband::pClient->getService(tservice)->getCharacteristic(tcharacteristic0)->getDescriptor((uint16_t)0x2902)->writeValue((uint8_t*)NotifyOn, sizeof(NotifyOn), true);
-    armband::pClient->getService(tservice)->getCharacteristic(tcharacteristic1)->getDescriptor((uint16_t)0x2902)->writeValue((uint8_t*)NotifyOn, sizeof(NotifyOn), true);
-    armband::pClient->getService(tservice)->getCharacteristic(tcharacteristic2)->getDescriptor((uint16_t)0x2902)->writeValue((uint8_t*)NotifyOn, sizeof(NotifyOn), true);
-    armband::pClient->getService(tservice)->getCharacteristic(tcharacteristic3)->getDescriptor((uint16_t)0x2902)->writeValue((uint8_t*)NotifyOn, sizeof(NotifyOn), true);
-    return armband::pClient->getService(BLEUUID(tservice))->getCharacteristic(BLEUUID(tcharacteristic0));
+void armband::battery_notification(BLEDevice peripheral){
+//const char* deviceServiceCharacteristicUuid  = "00002a19-0000-1000-8000-00805f9b34fb";
+BLEService batteryService = peripheral.service("180f");
+
+    if (batteryService) {
+      // use the service
+       Serial.println("Peripheral have battery service");
+      BLECharacteristic batteryLevelCharacteristic = peripheral.characteristic("2a19");
+      if (batteryLevelCharacteristic) {
+        // use the characteristic
+        Serial.println("Peripheral have battery level characteristic");
+         while (peripheral.connected()) {
+        // while the peripheral is connected 
+        if(batteryLevelCharacteristic.canRead()){
+          armband::battery = batteryLevelCharacteristic.read(); //  reads incoming data.
+          batteryLevelCharacteristic.readValue(battery); //  stores incoming data in the value byte.
+         // Serial.println(batteryLevelCharacteristic.readValue(value));
+        Serial.print("Battery level:");       
+        Serial.println(battery);
+        }
   }
+ 
+  Serial.println("- Peripheral device disconnected!");
+
+      } else {
+        Serial.println("Peripheral does NOT have battery level characteristic");
+      }
+    } else {
+      Serial.println("Peripheral does NOT have battery service");
+    }
 }
 
-BLERemoteCharacteristic* armband::imu_notification(uint8_t on_off) {
-  if (armband::connected) {
-    BLEUUID tservice = BLEUUID("d5060002-a904-deb9-4748-2c7f4a124842");
-    BLEUUID tcharacteristic = BLEUUID("d5060402-a904-deb9-4748-2c7f4a124842");
-    uint8_t NotifyOn[] = {on_off, 0x00};
-    armband::pClient->getService(tservice)->getCharacteristic(tcharacteristic)->getDescriptor((uint16_t)0x2902)->writeValue((uint8_t*)NotifyOn, sizeof(NotifyOn), true);
-    return armband::pClient->getService(BLEUUID(tservice))->getCharacteristic(BLEUUID(tcharacteristic));
-  }
+/********************************************************************************************************
+    EMG notification
+ ********************************************************************************************************/
+
+void armband::emg_notification(BLEDevice peripheral){
+BLEService EmgDataService = peripheral.service("d5060005-a904-deb9-4748-2c7f4a124842");
+ 
+    if (EmgDataService) {
+      // use the service
+       Serial.println("Peripheral have EMG service");
+  
+      BLECharacteristic EmgData0Characteristic = peripheral.characteristic("d5060105-a904-deb9-4748-2c7f4a124842");
+      BLECharacteristic EmgData1Characteristic = peripheral.characteristic("d5060205-a904-deb9-4748-2c7f4a124842");
+      BLECharacteristic EmgData2Characteristic = peripheral.characteristic("d5060305-a904-deb9-4748-2c7f4a124842");
+      BLECharacteristic EmgData3Characteristic = peripheral.characteristic("d5060405-a904-deb9-4748-2c7f4a124842");
+      
+      if(EmgData0Characteristic && EmgData1Characteristic && EmgData2Characteristic && EmgData3Characteristic){
+      // use the characteristics
+        //Serial.println("Check if EMG can subscribe ");
+        //Serial.println(EmgData0Characteristic.canSubscribe());
+        //Serial.println("Peripheral have EmgData2 Characteristic");
+        //Serial.println("Peripheral have EmgData3 Characteristic");
+
+        while(peripheral.connected()){
+            
+         // EmgData0Characteristic.readValue(emgdata1);
+          //Serial.print("EMG data :");       
+         // Serial.println(EmgData0Characteristic.canWrite());
+          if(EmgData0Characteristic.canSubscribe() && EmgData1Characteristic.canSubscribe() && EmgData2Characteristic.canSubscribe() && EmgData3Characteristic.canSubscribe()){
+     /*     //Serial.println("EmgData0Characteristic.read");
+            Serial.println(EmgData0Characteristic.subscribe());
+            Serial.println(EmgData1Characteristic.subscribe());
+            Serial.println(EmgData2Characteristic.subscribe());
+            Serial.println(EmgData3Characteristic.subscribe());
+   */ 
+          
+            EmgData0Characteristic.subscribe();
+            EmgData1Characteristic.subscribe();
+            EmgData2Characteristic.subscribe();
+            EmgData3Characteristic.subscribe();
+         
+            armband::emgdata0= EmgData0Characteristic.read(); //  reads incoming data.
+    /*      armband::emgdata1= EmgData1Characteristic.read(); //  reads incoming data.
+            armband::emgdata2= EmgData2Characteristic.read(); //  reads incoming data.
+            armband::emgdata3= EmgData3Characteristic.read(); //  reads incoming data.
+
+            armband::emgdata0= EmgData0Characteristic.subscribe(); //  reads incoming data.
+            armband::emgdata1= EmgData1Characteristic.subscribe(); //  reads incoming data.
+            armband::emgdata2= EmgData2Characteristic.subscribe();//  reads incoming data.
+            armband::emgdata3= EmgData3Characteristic.subscribe(); //  reads incoming data.
+
+            EmgData0Characteristic.readValue(emgdata0);
+            EmgData1Characteristic.readValue(emgdata1);
+            EmgData2Characteristic.readValue(emgdata2);
+            EmgData3Characteristic.readValue(emgdata3);
+ */ 
+  /*      
+            Serial.print("EmgData 0 Characteristic read ");
+            Serial.println(EmgData0Characteristic.readValue(emgdata0));
+       
+            Serial.print("EmgData 1 Characteristic read ");
+            Serial.println(EmgData1Characteristic.readValue(emgdata1));
+
+            Serial.print("EmgData 2 Characteristic read ");
+            Serial.println(EmgData2Characteristic.readValue(emgdata2));
+
+            Serial.print("EmgData 3 Characteristic read ");
+            Serial.println(EmgData3Characteristic.readValue(emgdata3));
+      */   
+       // Serial.print("EMG data 0 :");       
+        //Serial.println(emgdata0);
+     
+        emg_callback(emgdata0); // print EMG data
+
+       //  emg_callback(emgdata1);
+/*
+         Serial.print("EMG data 1 :");       
+         Serial.println(emgdata1);
+
+         Serial.print("EMG data 2 :");       
+         Serial.println(emgdata2);
+
+         Serial.print("EMG data 3 :");       
+         Serial.println(emgdata3);
+   */         
+          }
+        }
+      }else{
+        Serial.println("Periphral does NOT have EMG charactersitics ");
+      }
+    } else {
+      Serial.println("Peripheral does NOT have EMG service");
+    }
 }
 
-BLERemoteCharacteristic* armband::battery_notification(uint8_t on_off) {
-  if (armband::connected) {
-    BLEUUID tservice = BLEUUID("0000180f-0000-1000-8000-00805f9b34fb");
-    BLEUUID tcharacteristic = BLEUUID("00002a19-0000-1000-8000-00805f9b34fb");
-    uint8_t NotifyOn[] = {on_off, 0x00};
-    armband::pClient->getService(tservice)->getCharacteristic(tcharacteristic)->getDescriptor((uint16_t)0x2902)->writeValue((uint8_t*)NotifyOn, sizeof(NotifyOn), true);
-    return armband::pClient->getService(BLEUUID(tservice))->getCharacteristic(BLEUUID(tcharacteristic));
+
+void armband::print_emg_sample(int8_t *sample, size_t len)
+{
+  /*
+  Serial.print(-100);
+  Serial.print("\t");
+  Serial.print(+100);
+  Serial.print("\t");
+*/
+  for (int i = 0; i < len; i++)
+  {
+  
+   Serial.print(sample[i]);
+   Serial.print("\t");
+  
   }
+  Serial.println();
+  
 }
 
-BLERemoteCharacteristic* armband::gesture_notification(uint8_t on_off) {
-  if (armband::connected) {
-    BLEUUID tservice = BLEUUID("d5060003-a904-deb9-4748-2c7f4a124842");
-    BLEUUID tcharacteristic = BLEUUID("d5060103-a904-deb9-4748-2c7f4a124842");
-    uint8_t IndicateOn[] = {2 * on_off, 0x00};
-    armband::pClient->getService(tservice)->getCharacteristic(tcharacteristic)->getDescriptor(((uint16_t)0x2902))->writeValue((uint8_t*)IndicateOn, sizeof(IndicateOn), true);
-    return armband::pClient->getService(BLEUUID(tservice))->getCharacteristic(BLEUUID(tcharacteristic));
+void armband::emg_callback(uint8_t pData)
+{
+  
+  myohw_emg_data_t *emg_data = (myohw_emg_data_t *)pData;
+  print_emg_sample(emg_data->sample1, myohw_num_emg_sensors);
+  //Serial.println("");
+}
+
+void armband::set_myo_mode(BLEDevice peripheral, uint8_t emg_mode, uint8_t imu_mode, uint8_t clf_mode){
+  BLEService ControlService = peripheral.service("d5060001-a904-deb9-4748-2c7f4a124842");
+
+  if(ControlService){
+    BLECharacteristic CommandCharacteristic = peripheral.characteristic("d5060401-a904-deb9-4748-2c7f4a124842");
+    Serial.println("Peripheral have Myo mode service");
+    if(CommandCharacteristic){
+
+      Serial.println("Peripheral have Myo mode characteristic");
+        while (peripheral.connected()) {
+        // while the peripheral is connected 
+        if(CommandCharacteristic.canWrite()){
+       CommandCharacteristic.writeValue(emg_mode); // write request or command sent 
+       CommandCharacteristic.writeValue(imu_mode); // write request or command sent 
+       CommandCharacteristic.writeValue(clf_mode); // write request or command sent 
+      
+       // Serial.print("command charactristic can write:");       
+       // Serial.println(CommandCharacteristic.writeValue(emg_mode));
+        }
+        emg_notification(peripheral); 
+  }
+
+    }else {
+      Serial.println("Peripheral have NOT Myo mode characteristic");
+    }
+  }else{
+    Serial.println("Peripheral have NOT Myo mode service");
   }
 }
 
 /********************************************************************************************************
-    COMMANDS
+    IMU notification
  ********************************************************************************************************/
-
-void armband::set_myo_mode(uint8_t emg_mode, uint8_t imu_mode, uint8_t clf_mode) {
-  if (armband::connected) {
-    BLEUUID tservice = BLEUUID("d5060001-a904-deb9-4748-2c7f4a124842");
-    BLEUUID tcharacteristic = BLEUUID("d5060401-a904-deb9-4748-2c7f4a124842");
-    uint8_t writeVal[] = {0x01, 0x03, emg_mode, imu_mode, clf_mode};
-    armband::pClient->getService(tservice)->getCharacteristic(tcharacteristic)->writeValue(writeVal, sizeof(writeVal));
-  }
+void armband::print_imu_orientation(myohw_imu_data_t *imu)
+{
+  Serial.print(imu->orientation.x);
+  Serial.print("\t");
+  Serial.print(imu->orientation.y);
+  Serial.print("\t");
+  Serial.print(imu->orientation.z);
+  Serial.print("\t");
+  Serial.print(imu->orientation.w);
+  Serial.print("\t");
 }
 
-void armband::set_sleep_mode(uint8_t sleep_mode) {
-  if (armband::connected) {
-    BLEUUID tservice = BLEUUID("d5060001-a904-deb9-4748-2c7f4a124842");
-    BLEUUID tcharacteristic = BLEUUID("d5060401-a904-deb9-4748-2c7f4a124842");
-    uint8_t writeVal[] = {0x09, 0x01, sleep_mode};
-    armband::pClient->getService(tservice)->getCharacteristic(tcharacteristic)->writeValue(writeVal, sizeof(writeVal));
-  }
+
+void armband::imu_callback(uint8_t pData)
+{
+  myohw_imu_data_t *imu_data = (myohw_imu_data_t *)pData;
+  print_imu_orientation(imu_data);
+  Serial.println();
 }
 
-void armband::vibration(uint8_t duration) {
-  if (armband::connected) {
-    BLEUUID tservice = BLEUUID("d5060001-a904-deb9-4748-2c7f4a124842");
-    BLEUUID tcharacteristic = BLEUUID("d5060401-a904-deb9-4748-2c7f4a124842");
-    uint8_t writeVal[] = {0x03, 0x01, duration};
-    armband::pClient->getService(tservice)->getCharacteristic(tcharacteristic)->writeValue(writeVal, sizeof(writeVal));
-  }
+void armband::imu_notification(BLEDevice peripheral){
+  BLEService ImuDataService = peripheral.service("d5060002-a904-deb9-4748-2c7f4a124842");
+ 
+    if (ImuDataService) {
+      // use the service
+       Serial.println("Peripheral have IMU service");
+  
+      BLECharacteristic IMUDataCharacteristic = peripheral.characteristic("d5060402-a904-deb9-4748-2c7f4a124842");
+
+      if(IMUDataCharacteristic){
+        Serial.println("Peripheral have IMU characteristic");
+
+        while(peripheral.connected()){
+
+          if(IMUDataCharacteristic.canSubscribe()){
+              IMUDataCharacteristic.subscribe();
+              armband::imudata= IMUDataCharacteristic.read();
+              //Serial.print("reading imudata ");
+             // Serial.print(imudata);
+              imu_callback(imudata);
+          }
+        }
+      }
+
+}
 }
 
-void armband::user_action(uint8_t action_type) {
-  if (armband::connected) {
-    BLEUUID tservice = BLEUUID("d5060001-a904-deb9-4748-2c7f4a124842");
-    BLEUUID tcharacteristic = BLEUUID("d5060401-a904-deb9-4748-2c7f4a124842");
-    uint8_t writeVal[] = {myohw_command_user_action, 0x01, action_type};
-    armband::pClient->getService(tservice)->getCharacteristic(tcharacteristic)->writeValue(writeVal, sizeof(writeVal));
-  }
-}
 
-void armband::unlock(uint8_t unlock_mode) {
-  if (armband::connected) {
-    BLEUUID tservice = BLEUUID("d5060001-a904-deb9-4748-2c7f4a124842");
-    BLEUUID tcharacteristic = BLEUUID("d5060401-a904-deb9-4748-2c7f4a124842");
-    uint8_t writeVal[] = {0x0a, 0x01, unlock_mode};
-    armband::pClient->getService(tservice)->getCharacteristic(tcharacteristic)->writeValue(writeVal, sizeof(writeVal));
-  }
-}
+
+

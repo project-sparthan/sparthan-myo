@@ -6,50 +6,44 @@
 #include <BLEDevice.h>
 #include "includes/myo_bluetooth.h"
 
-#define TURN_OFF 0x00
-#define TURN_ON 0x01
-
 class armband
 {
-  public:
-    void connect();
+    public:
 
-    void get_info();
-    void get_firmware();
-
-    void set_myo_mode(uint8_t, uint8_t, uint8_t);
-    void vibration(uint8_t);
-    void user_action(uint8_t);
-    void set_sleep_mode(uint8_t);
-    void unlock(uint8_t);
-
-    BLERemoteCharacteristic* emg_notification(uint8_t);
-    BLERemoteCharacteristic* imu_notification(uint8_t);
-    BLERemoteCharacteristic* battery_notification(uint8_t);
-    BLERemoteCharacteristic* gesture_notification(uint8_t);
     
-    BLEClient* pClient;
+    void scanCentral();
+    void controlPeripheral(BLEDevice);
+    void connectToPeripheral();
+    
+    void updateStatus();
+    void connect();
 
     // Static status variables that can be used in callbacks
     static bool connected;
     static bool detected;
     static bool debug;
 
-    uint16_t fw_major;
-    uint16_t fw_minor;
-    uint16_t fw_patch;
-    uint16_t fw_hardware_rev;
-    uint8_t fw_serial_number[6];
-    uint16_t fw_unlock_pose;
-    uint8_t fw_active_classifier_type;
-    uint8_t fw_active_classifier_index;
-    uint8_t fw_has_custom_classifier;
-    uint8_t fw_stream_indicating;
-    uint8_t fw_sku;
-    uint8_t fw_reserved[7];
-    uint8_t battery;
+    void battery_notification(BLEDevice peripheral);
+    void emg_notification(BLEDevice peripheral);
+    void imu_notification(BLEDevice peripheral);
+    void emg_callback(uint8_t pData);
+    void imu_callback(uint8_t pData);
+    void print_emg_sample(int8_t *sample, size_t len);
+    void set_myo_mode(BLEDevice, uint8_t, uint8_t, uint8_t);
+    void print_imu_orientation(myohw_imu_data_t *imu);
     
-  private:
-};
 
+    uint8_t battery;
+    uint8_t emgdata0;
+    uint8_t emgdata1;
+    uint8_t emgdata2;
+    uint8_t emgdata3;
+    uint8_t imudata;
+    uint8_t length = 2;
+
+    private:
+        /* data */
+
+    };
+   
 #endif

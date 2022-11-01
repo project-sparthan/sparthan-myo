@@ -299,7 +299,7 @@ typedef enum {
 
 /// Motion event data received in a myohw_att_handle_motion_event attribute.
 typedef struct MYOHW_PACKED {
-    uint8_t type; /// Type type of motion event that occurred. See myohw_motion_event_type_t.
+    uint8_t type; /// type of motion event that occurred. See myohw_motion_event_type_t.
 
     /// Event-specific data.
     union MYOHW_PACKED {
