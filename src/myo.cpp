@@ -5,6 +5,9 @@
 // The remote service (Myo) we wish to connect to
 const char* deviceServiceUuid = "d5060001-a904-deb9-4748-2c7f4a124842"; //  scans for Bluetooth® Low Energy peripherals
                                                                         //  until the one inside parenthesis is found.
+/********************************************************************************************************
+    Connection
+ ********************************************************************************************************/
 
 void armband::scanCentral(){
 
@@ -89,13 +92,16 @@ void armband::connectToPeripheral(){
     BLE.stopScan();
 
     controlPeripheral(peripheral); 
-    emg_notification(peripheral); 
+  
     //battery_notification(peripheral);
- 
+
     set_myo_mode(peripheral, myohw_emg_mode_send_emg,         // EMG mode
               myohw_imu_mode_none,                            // IMU mode
               myohw_classifier_mode_disabled);
-  
+     
+
+    emg_notification(peripheral); 
+
     //imu_notification(peripheral);
               
 
@@ -145,11 +151,13 @@ BLEService batteryService = peripheral.service("180f");
 
 void armband::emg_notification(BLEDevice peripheral){
 BLEService EmgDataService = peripheral.service("d5060005-a904-deb9-4748-2c7f4a124842");
- 
+
+
     if (EmgDataService) {
       // use the service
        Serial.println("Peripheral have EMG service");
-  
+
+      
       BLECharacteristic EmgData0Characteristic = peripheral.characteristic("d5060105-a904-deb9-4748-2c7f4a124842");
       BLECharacteristic EmgData1Characteristic = peripheral.characteristic("d5060205-a904-deb9-4748-2c7f4a124842");
       BLECharacteristic EmgData2Characteristic = peripheral.characteristic("d5060305-a904-deb9-4748-2c7f4a124842");
@@ -168,33 +176,35 @@ BLEService EmgDataService = peripheral.service("d5060005-a904-deb9-4748-2c7f4a12
           //Serial.print("EMG data :");       
          // Serial.println(EmgData0Characteristic.canWrite());
           if(EmgData0Characteristic.canSubscribe() && EmgData1Characteristic.canSubscribe() && EmgData2Characteristic.canSubscribe() && EmgData3Characteristic.canSubscribe()){
+     
      /*     //Serial.println("EmgData0Characteristic.read");
             Serial.println(EmgData0Characteristic.subscribe());
             Serial.println(EmgData1Characteristic.subscribe());
             Serial.println(EmgData2Characteristic.subscribe());
             Serial.println(EmgData3Characteristic.subscribe());
-   */ 
+  */  
           
             EmgData0Characteristic.subscribe();
             EmgData1Characteristic.subscribe();
             EmgData2Characteristic.subscribe();
             EmgData3Characteristic.subscribe();
-         
+       /*  
             armband::emgdata0= EmgData0Characteristic.read(); //  reads incoming data.
-    /*      armband::emgdata1= EmgData1Characteristic.read(); //  reads incoming data.
+            armband::emgdata1= EmgData1Characteristic.read(); //  reads incoming data.
             armband::emgdata2= EmgData2Characteristic.read(); //  reads incoming data.
             armband::emgdata3= EmgData3Characteristic.read(); //  reads incoming data.
-
-            armband::emgdata0= EmgData0Characteristic.subscribe(); //  reads incoming data.
-            armband::emgdata1= EmgData1Characteristic.subscribe(); //  reads incoming data.
-            armband::emgdata2= EmgData2Characteristic.subscribe();//  reads incoming data.
-            armband::emgdata3= EmgData3Characteristic.subscribe(); //  reads incoming data.
-
+ 
+           
+            armband::emgdata0= EmgData0Characteristic.subscribe(); 
+            armband::emgdata1= EmgData1Characteristic.subscribe(); 
+            armband::emgdata2= EmgData2Characteristic.subscribe();
+            armband::emgdata3= EmgData3Characteristic.subscribe(); 
+ */ 
             EmgData0Characteristic.readValue(emgdata0);
             EmgData1Characteristic.readValue(emgdata1);
             EmgData2Characteristic.readValue(emgdata2);
             EmgData3Characteristic.readValue(emgdata3);
- */ 
+
   /*      
             Serial.print("EmgData 0 Characteristic read ");
             Serial.println(EmgData0Characteristic.readValue(emgdata0));
@@ -212,8 +222,7 @@ BLEService EmgDataService = peripheral.service("d5060005-a904-deb9-4748-2c7f4a12
         //Serial.println(emgdata0);
      
         emg_callback(emgdata0); // print EMG data
-
-       //  emg_callback(emgdata1);
+    
 /*
          Serial.print("EMG data 1 :");       
          Serial.println(emgdata1);
@@ -261,37 +270,6 @@ void armband::emg_callback(uint8_t pData)
   print_emg_sample(emg_data->sample1, myohw_num_emg_sensors);
   //Serial.println("");
 }
-
-void armband::set_myo_mode(BLEDevice peripheral, uint8_t emg_mode, uint8_t imu_mode, uint8_t clf_mode){
-  BLEService ControlService = peripheral.service("d5060001-a904-deb9-4748-2c7f4a124842");
-
-  if(ControlService){
-    BLECharacteristic CommandCharacteristic = peripheral.characteristic("d5060401-a904-deb9-4748-2c7f4a124842");
-    Serial.println("Peripheral have Myo mode service");
-    if(CommandCharacteristic){
-
-      Serial.println("Peripheral have Myo mode characteristic");
-        while (peripheral.connected()) {
-        // while the peripheral is connected 
-        if(CommandCharacteristic.canWrite()){
-       CommandCharacteristic.writeValue(emg_mode); // write request or command sent 
-       CommandCharacteristic.writeValue(imu_mode); // write request or command sent 
-       CommandCharacteristic.writeValue(clf_mode); // write request or command sent 
-      
-       // Serial.print("command charactristic can write:");       
-       // Serial.println(CommandCharacteristic.writeValue(emg_mode));
-        }
-        emg_notification(peripheral); 
-  }
-
-    }else {
-      Serial.println("Peripheral have NOT Myo mode characteristic");
-    }
-  }else{
-    Serial.println("Peripheral have NOT Myo mode service");
-  }
-}
-
 /********************************************************************************************************
     IMU notification
  ********************************************************************************************************/
@@ -343,5 +321,129 @@ void armband::imu_notification(BLEDevice peripheral){
 }
 
 
+/********************************************************************************************************
+   COMMANDS
+ ********************************************************************************************************/
 
+void armband::set_myo_mode(BLEDevice peripheral, uint8_t emg_mode, uint8_t imu_mode, uint8_t clf_mode){
+  BLEService ControlService = peripheral.service("d5060001-a904-deb9-4748-2c7f4a124842");
 
+  if(ControlService){
+    BLECharacteristic CommandCharacteristic = peripheral.characteristic("d5060401-a904-deb9-4748-2c7f4a124842");
+    Serial.println("Peripheral have Myo mode command service");
+    if(CommandCharacteristic){
+
+      Serial.println("Peripheral have Myo mode command characteristic");
+        while (peripheral.connected()) {
+        // while the peripheral is connected 
+        if(CommandCharacteristic.canWrite()){
+       CommandCharacteristic.writeValue((byte)0x01); // write request or command sent
+       CommandCharacteristic.writeValue((byte)0x03); // write request or command sent  
+       CommandCharacteristic.writeValue(emg_mode); // write request or command sent 
+       CommandCharacteristic.writeValue(imu_mode); // write request or command sent 
+       CommandCharacteristic.writeValue(clf_mode); // write request or command sent 
+     
+        }
+  }
+
+    }else {
+      Serial.println("Peripheral does NOT have Myo mode command characteristic");
+    }
+  }else{
+    Serial.println("Peripheral does NOT have Myo mode command service");
+  }
+}
+
+void armband::set_sleep_mode(BLEDevice peripheral, uint8_t sleep_mode){
+ BLEService ControlService = peripheral.service("d5060001-a904-deb9-4748-2c7f4a124842");
+ if(ControlService){
+    BLECharacteristic CommandCharacteristic = peripheral.characteristic("d5060401-a904-deb9-4748-2c7f4a124842");
+    Serial.println("Peripheral have sleep mode command service");
+    if(CommandCharacteristic){
+
+      Serial.println("Peripheral have sleep mode command characteristic");
+        while (peripheral.connected()) {
+        // while the peripheral is connected 
+        if(CommandCharacteristic.canWrite()){
+       CommandCharacteristic.writeValue(sleep_mode); // write request or command sent 
+        }
+  }
+    }else {
+      Serial.println("Peripheral does NOT have sleep mode command characteristic");
+    }
+  }else{
+    Serial.println("Peripheral does NOT have sleep mode command service");
+  }
+}
+
+void armband::vibration(BLEDevice peripheral, uint8_t duration){
+ BLEService ControlService = peripheral.service("d5060001-a904-deb9-4748-2c7f4a124842");
+ if(ControlService){
+    BLECharacteristic CommandCharacteristic = peripheral.characteristic("d5060401-a904-deb9-4748-2c7f4a124842");
+    Serial.println("Peripheral have vibration command service");
+    if(CommandCharacteristic){
+
+      Serial.println("Peripheral have vibration command characteristic");
+        while (peripheral.connected()) {
+        // while the peripheral is connected 
+        if(CommandCharacteristic.canWrite()){
+        CommandCharacteristic.writeValue((byte)0x03); // write request or command sent 
+        CommandCharacteristic.writeValue((byte)0x01); // write request or command sent 
+        CommandCharacteristic.writeValue(duration); // write request or command sent 
+        }
+  }
+    }else {
+      Serial.println("Peripheral does NOT have vibration command characteristic");
+    }
+  }else{
+    Serial.println("Peripheral does NOT have vibration command service");
+  }
+}
+
+void armband::user_action(BLEDevice peripheral, uint8_t action_type){
+ BLEService ControlService = peripheral.service("d5060001-a904-deb9-4748-2c7f4a124842");
+ if(ControlService){
+    BLECharacteristic CommandCharacteristic = peripheral.characteristic("d5060401-a904-deb9-4748-2c7f4a124842");
+    Serial.println("Peripheral have user action cammand  service");
+    if(CommandCharacteristic){
+
+      Serial.println("Peripheral have user action cammand  characteristic");
+        while (peripheral.connected()) {
+        // while the peripheral is connected 
+        if(CommandCharacteristic.canWrite()){
+       // CommandCharacteristic.writeValue(myohw_command_user_action); // write request or command sent 
+        CommandCharacteristic.writeValue((byte)0x01); // write request or command sent 
+       CommandCharacteristic.writeValue(action_type); // write request or command sent 
+        }
+  }
+    }else {
+      Serial.println("Peripheral does NOT have user action cammand characteristic");
+    }
+  }else{
+    Serial.println("Peripheral does NOT have user action cammand service");
+  }
+}
+
+void armband::unlock(BLEDevice peripheral, uint8_t unlock_mode){
+ BLEService ControlService = peripheral.service("d5060001-a904-deb9-4748-2c7f4a124842");
+ if(ControlService){
+    BLECharacteristic CommandCharacteristic = peripheral.characteristic("d5060401-a904-deb9-4748-2c7f4a124842");
+    Serial.println("Peripheral have unlock command  service");
+    if(CommandCharacteristic){
+
+      Serial.println("Peripheral have unlock command characteristic");
+        while (peripheral.connected()) {
+        // while the peripheral is connected 
+        if(CommandCharacteristic.canWrite()){
+        CommandCharacteristic.writeValue((byte)0x0a); // write request or command sent 
+        CommandCharacteristic.writeValue((byte)0x01); // write request or command sent 
+        CommandCharacteristic.writeValue(unlock_mode); // write request or command sent 
+        }
+  }
+    }else {
+      Serial.println("Peripheral does NOT have unlock command characteristic");
+    }
+  }else{
+    Serial.println("Peripheral does NOT have unlock command service");
+  }
+}

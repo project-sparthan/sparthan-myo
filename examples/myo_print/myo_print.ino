@@ -21,7 +21,7 @@ void setup()
   // Start the serial interface
   Serial.begin(115200);
  
- // start scanning 
+// start scanning 
  myo.scanCentral();
 
 
@@ -29,6 +29,9 @@ void setup()
 
 void loop()
 {
+  
+
+
 // connect to myo 
 myo.connectToPeripheral();
 
